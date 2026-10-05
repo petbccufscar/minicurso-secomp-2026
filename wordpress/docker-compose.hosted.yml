@@ -2,6 +2,9 @@
 # Uso (dentro da VM, na pasta wordpress/):
 #   docker compose -f docker-compose.hosted.yml up -d --build
 # Depois publique com um túnel apontando para http://localhost:8080
+#
+# OBS: no WORDPRESS_CONFIG_EXTRA os '$' do PHP são escritos como '$$'
+#      para o docker compose NÃO tratá-los como variáveis dele.
 services:
   db:
     image: mysql:5.7
@@ -30,11 +33,11 @@ services:
       # Faz o WordPress usar SEMPRE o host/protocolo pelo qual foi acessado (inclusive via túnel),
       # evitando redirecionamentos quebrados quando a URL pública muda.
       WORDPRESS_CONFIG_EXTRA: |
-        if (isset($_SERVER['HTTP_HOST'])) {
-          $scheme = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) ? $_SERVER['HTTP_X_FORWARDED_PROTO']
-                   : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
-          define('WP_HOME',    $scheme . '://' . $_SERVER['HTTP_HOST']);
-          define('WP_SITEURL', $scheme . '://' . $_SERVER['HTTP_HOST']);
+        if (isset($$_SERVER['HTTP_HOST'])) {
+          $$scheme = (!empty($$_SERVER['HTTP_X_FORWARDED_PROTO'])) ? $$_SERVER['HTTP_X_FORWARDED_PROTO']
+                   : ((!empty($$_SERVER['HTTPS']) && $$_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+          define('WP_HOME',    $$scheme . '://' . $$_SERVER['HTTP_HOST']);
+          define('WP_SITEURL', $$scheme . '://' . $$_SERVER['HTTP_HOST']);
         }
 
 volumes:
