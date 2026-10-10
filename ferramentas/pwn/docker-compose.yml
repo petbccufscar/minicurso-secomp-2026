@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  ctf-box:
+    build: .
+    container_name: ctf-box
+    volumes:
+      - ./workspace:/workspace
+    security_opt:
+      - seccomp:unconfined
